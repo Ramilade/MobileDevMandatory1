@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Modal, TouchableOpacity } from 'react-native';
 import { View, Text, TextInput, Button, FlatList, StyleSheet } from 'react-native';
 import { doc, getDoc, setDoc, addDoc, collection, query, orderBy, limit, onSnapshot } from "firebase/firestore"; 
 
@@ -10,6 +11,8 @@ export default function DrinkTimer() {
   const [currentInput, setCurrentInput] = useState('');
   const [dailyIntakeGoal, setDailyIntakeGoal] = useState('');
   const [dailyIntake, setDailyIntake] = useState([]);
+
+  const [isModalVisible, setIsModalVisible] = useState(false);
 
   // Load dailyGoal from Firestore when component mounts
   useEffect(() => {
@@ -76,24 +79,37 @@ const unsubscribe = onSnapshot(drinksQuery, (querySnapshot) => {
       />
       <Button title="Submit" onPress={handleSubmit} />
 
-      <TextInput
-        style={styles.input}
-        placeholder="Enter daily goal in ml"
-        keyboardType="numeric"
-        value={dailyIntakeGoal}
-        onChangeText={text => setDailyIntakeGoal(text)}
-        onBlur={saveDailyGoal} // Save to Firestore when user leaves the input
-      />
+      <Button title="Set Daily Goal" onPress={() => setIsModalVisible(true)} />
 
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isModalVisible}
+        onRequestClose={() => setIsModalVisible(false)}
+      >
+        <View style={styles.centeredView}>
+          <View style={styles.modalView}>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter daily goal in ml"
+              keyboardType="numeric"
+              value={dailyIntakeGoal}
+              onChangeText={text => setDailyIntakeGoal(text)}
+            />
+            <Button title="Save" onPress={async () => {
+              await saveDailyGoal();
+              setIsModalVisible(false);
+            }} />
+            <TouchableOpacity onPress={() => setIsModalVisible(false)} style={{ marginTop: 10 }}>
+              <Text style={{ color: 'blue' }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <Text style={styles.summary}>
         Daily Intake: {totalIntake} ml which is {percentageOfGoal.toFixed(2)}% of your daily intake goal of {dailyIntakeGoal} ml
       </Text>
-
-      <View style={styles.titleBar}>
-        <Text style={styles.titleBarText}>Last 5 drinks</Text>
-        <View style={styles.underline} />
-      </View>
 
       <FlatList
         data={dailyIntake.slice(0, 5)}
@@ -148,5 +164,26 @@ const styles = StyleSheet.create({
     borderBottomColor: 'gray',
     borderBottomWidth: 1,
     width: '100%',
+  },
+  centeredView: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 22,
+  },
+  modalView: {
+    margin: 20,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 35,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5
   },
 });
