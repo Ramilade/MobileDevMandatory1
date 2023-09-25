@@ -11,8 +11,39 @@ export default function DrinkTimer() {
   const [currentInput, setCurrentInput] = useState('');
   const [dailyIntakeGoal, setDailyIntakeGoal] = useState('');
   const [dailyIntake, setDailyIntake] = useState([]);
+  const [archivedIntakes, setArchivedIntakes] = useState([]);
+
 
   const [isModalVisible, setIsModalVisible] = useState(false);
+
+
+  useEffect(() => {
+    
+    const now = new Date();
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const timeUntilMidnight = nextMidnight - now;
+
+    const timerId = setTimeout(async () => {
+      // Save current day's intake to Firestore archive
+      const docRef = doc(db, "dailyArchive", new Date().toISOString().split("T")[0]);
+      await setDoc(docRef, { intake: dailyIntake });
+
+      // Reset daily intake
+      setDailyIntake([]);
+    }, timeUntilMidnight);
+
+    return () => clearTimeout(timerId);
+  }, [dailyIntake]);
+
+  useEffect(() => {
+    const fetchArchivedData = async () => {
+      const querySnapshot = await getDocs(collection(db, "dailyArchive"));
+      setArchivedIntakes(querySnapshot.docs.map(doc => ({ date: doc.id, ...doc.data() })));
+    };
+
+    fetchArchivedData();
+  }, []);
+
 
   // Load dailyGoal from Firestore when component mounts
   useEffect(() => {
@@ -34,6 +65,8 @@ const unsubscribe = onSnapshot(drinksQuery, (querySnapshot) => {
   const drinksData = querySnapshot.docs.map(doc => doc.data());
   setDailyIntake(drinksData);
 });
+
+
 
 
     return () => unsubscribe();
@@ -78,9 +111,9 @@ const unsubscribe = onSnapshot(drinksQuery, (querySnapshot) => {
         onChangeText={text => setCurrentInput(text)}
       />
       <Button title="Submit" onPress={handleSubmit} />
-
+  
       <Button title="Set Daily Goal" onPress={() => setIsModalVisible(true)} />
-
+  
       <Modal
         animationType="slide"
         transparent={true}
@@ -106,11 +139,11 @@ const unsubscribe = onSnapshot(drinksQuery, (querySnapshot) => {
           </View>
         </View>
       </Modal>
-
+  
       <Text style={styles.summary}>
         Daily Intake: {totalIntake} ml which is {percentageOfGoal.toFixed(2)}% of your daily intake goal of {dailyIntakeGoal} ml
       </Text>
-
+  
       <FlatList
         data={dailyIntake.slice(0, 5)}
         renderItem={({ item }) => (
@@ -120,8 +153,21 @@ const unsubscribe = onSnapshot(drinksQuery, (querySnapshot) => {
         )}
         keyExtractor={item => item.id}
       />
+  
+      <Text style={styles.archiveTitle}>Archived Intakes:</Text>
+      <FlatList
+        data={archivedIntakes}
+        renderItem={({ item }) => (
+          <View style={styles.archiveItem}>
+            <Text>Date: {item.date}</Text>
+            <Text>Total Intake: {item.intake.reduce((total, { amount }) => total + amount, 0)} ml</Text>
+          </View>
+        )}
+        keyExtractor={item => item.date}
+      />
     </View>
   );
+  
 }
 
 const styles = StyleSheet.create({
@@ -185,5 +231,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5
+  },
+  archiveTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 30,
+  },
+  archiveItem: {
+    padding: 10,
+    borderBottomColor: 'gray',
+    borderBottomWidth: 1,
+    width: '100%',
   },
 });
