@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Mandatory1",
-    "slug": "Mandatory1",
+    "slug": "mandatory1",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -24,7 +24,14 @@
       }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "1a2ed5e0-396b-48be-b362-3fa5dd442e02"
+      }
+    },
+    "owner": "ramilade"
   }
 }
