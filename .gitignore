@@ -35,4 +35,4 @@ yarn-error.*
 *.tsbuildinfo
 
 # misc
-/components/config.jsx
+config.jsx
