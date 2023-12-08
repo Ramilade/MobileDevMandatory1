@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, TouchableOpacity } from 'react-native';
-import { View, Text, TextInput, Button, FlatList, StyleSheet } from 'react-native';
-import { doc, getDoc, setDoc, addDoc, collection, query, orderBy, limit, onSnapshot } from "firebase/firestore"; 
-
-
-// Importing the Firestore instance
+import { Modal, TouchableOpacity, ImageBackground, TextInput, Button, FlatList, View, Text, StyleSheet } from 'react-native';
+import { doc, getDoc, setDoc, addDoc, collection, query, orderBy, limit, onSnapshot, getDocs } from "firebase/firestore";
 import { db } from './config.jsx';
 
 export default function DrinkTimer() {
@@ -12,28 +8,18 @@ export default function DrinkTimer() {
   const [dailyIntakeGoal, setDailyIntakeGoal] = useState('');
   const [dailyIntake, setDailyIntake] = useState([]);
   const [archivedIntakes, setArchivedIntakes] = useState([]);
-
-
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [hasReachedGoal, setHasReachedGoal] = useState(false);
+  const [lastSubmitTime, setLastSubmitTime] = useState(new Date());
 
+  const archiveDailyIntake = async () => {
+    const yesterday = lastSubmitTime.toISOString().split('T')[0];
+    const docRef = doc(db, "dailyArchive", yesterday);
+    await setDoc(docRef, { intake: dailyIntake });
 
-  useEffect(() => {
-    
-    const now = new Date();
-    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const timeUntilMidnight = nextMidnight - now;
-
-    const timerId = setTimeout(async () => {
-      // Save current day's intake to Firestore archive
-      const docRef = doc(db, "dailyArchive", new Date().toISOString().split("T")[0]);
-      await setDoc(docRef, { intake: dailyIntake });
-
-      // Reset daily intake
-      setDailyIntake([]);
-    }, timeUntilMidnight);
-
-    return () => clearTimeout(timerId);
-  }, [dailyIntake]);
+    const querySnapshot = await getDocs(collection(db, "dailyArchive"));
+    setArchivedIntakes(querySnapshot.docs.map(doc => ({ date: doc.id, ...doc.data() })));
+  };
 
   useEffect(() => {
     const fetchArchivedData = async () => {
@@ -44,8 +30,6 @@ export default function DrinkTimer() {
     fetchArchivedData();
   }, []);
 
-
-  // Load dailyGoal from Firestore when component mounts
   useEffect(() => {
     const fetchDailyGoal = async () => {
       const docRef = doc(db, "meta", "dailyGoal");
@@ -58,16 +42,12 @@ export default function DrinkTimer() {
     fetchDailyGoal();
   }, []);
 
-  // Load recent drinks from Firestore when component mounts
   useEffect(() => {
     const drinksQuery = query(collection(db, "drinks"), orderBy('timestamp', 'desc'), limit(5));
-const unsubscribe = onSnapshot(drinksQuery, (querySnapshot) => {
-  const drinksData = querySnapshot.docs.map(doc => doc.data());
-  setDailyIntake(drinksData);
-});
-
-
-
+    const unsubscribe = onSnapshot(drinksQuery, (querySnapshot) => {
+      const drinksData = querySnapshot.docs.map(doc => doc.data());
+      setDailyIntake(drinksData);
+    });
 
     return () => unsubscribe();
   }, []);
@@ -79,22 +59,28 @@ const unsubscribe = onSnapshot(drinksQuery, (querySnapshot) => {
 
   const handleSubmit = async () => {
     if (currentInput) {
-        const now = new Date();
-        const formattedTime = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+      const now = new Date();
+      const formattedTime = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+      const intakeEntry = { amount: parseFloat(currentInput), timestamp: formattedTime, id: new Date().getTime().toString() };
 
-        const intakeEntry = {
-            amount: parseFloat(currentInput),
-            timestamp: formattedTime,
-            id: new Date().getTime().toString(),
-        };
+      if (now.getDate() !== lastSubmitTime.getDate() || now.getMonth() !== lastSubmitTime.getMonth() || now.getFullYear() !== lastSubmitTime.getFullYear()) {
+        await archiveDailyIntake();
+        setDailyIntake([]);
+      }
 
-        try {
-            await addDoc(collection(db, 'drinks'), intakeEntry);
-            setDailyIntake([intakeEntry, ...dailyIntake]);
-            setCurrentInput('');
-        } catch (error) {
-            console.error("Error adding document: ", error);
+      try {
+        await addDoc(collection(db, 'drinks'), intakeEntry);
+        setDailyIntake([intakeEntry, ...dailyIntake]);
+        setCurrentInput('');
+        setLastSubmitTime(now);
+
+        const newTotalIntake = dailyIntake.reduce((total, intake) => total + intake.amount, 0) + parseFloat(currentInput);
+        if (newTotalIntake >= parseFloat(dailyIntakeGoal)) {
+          setHasReachedGoal(true);
         }
+      } catch (error) {
+        console.error("Error adding document: ", error);
+      }
     }
   };
 
@@ -102,79 +88,100 @@ const unsubscribe = onSnapshot(drinksQuery, (querySnapshot) => {
   const percentageOfGoal = (totalIntake / parseFloat(dailyIntakeGoal || 1)) * 100;
 
   return (
-    <View style={styles.container}>
-      <TextInput
-        style={styles.input}
-        placeholder="Enter amount in ml"
-        keyboardType="numeric"
-        value={currentInput}
-        onChangeText={text => setCurrentInput(text)}
-      />
-      <Button title="Submit" onPress={handleSubmit} />
-  
-      <Button title="Set Daily Goal" onPress={() => setIsModalVisible(true)} />
-  
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isModalVisible}
-        onRequestClose={() => setIsModalVisible(false)}
-      >
-        <View style={styles.centeredView}>
-          <View style={styles.modalView}>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter daily goal in ml"
-              keyboardType="numeric"
-              value={dailyIntakeGoal}
-              onChangeText={text => setDailyIntakeGoal(text)}
-            />
-            <Button title="Save" onPress={async () => {
-              await saveDailyGoal();
-              setIsModalVisible(false);
-            }} />
-            <TouchableOpacity onPress={() => setIsModalVisible(false)} style={{ marginTop: 10 }}>
-              <Text style={{ color: 'blue' }}>Close</Text>
-            </TouchableOpacity>
+    <ImageBackground 
+      source={require('./waterdrop.jpg')} 
+      style={styles.backgroundImage}
+    >
+      <View style={styles.overlay}>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter amount in ml"
+          keyboardType="numeric"
+          value={currentInput}
+          onChangeText={text => setCurrentInput(text)}
+        />
+        <Button title="Submit" onPress={handleSubmit} />
+        <Button title="Set Daily Goal" onPress={() => setIsModalVisible(true)} />
+
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={isModalVisible}
+          onRequestClose={() => setIsModalVisible(false)}
+        >
+          <View style={styles.centeredView}>
+            <View style={styles.modalView}>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter daily goal in ml"
+                keyboardType="numeric"
+                value={dailyIntakeGoal}
+                onChangeText={text => setDailyIntakeGoal(text)}
+              />
+              <Button title="Save" onPress={async () => {
+                await saveDailyGoal();
+                setIsModalVisible(false);
+              }} />
+              <TouchableOpacity onPress={() => setIsModalVisible(false)} style={{ marginTop: 10 }}>
+                <Text style={{ color: 'blue' }}>Close</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </Modal>
-  
-      <Text style={styles.summary}>
-        Daily Intake: {totalIntake} ml which is {percentageOfGoal.toFixed(2)}% of your daily intake goal of {dailyIntakeGoal} ml
-      </Text>
-  
-      <FlatList
-        data={dailyIntake.slice(0, 5)}
-        renderItem={({ item }) => (
-          <View style={styles.listItem}>
-            <Text>{item.amount} ml at {item.timestamp}</Text>
+        </Modal>
+
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={hasReachedGoal}
+          onRequestClose={() => setHasReachedGoal(false)}
+        >
+          <View style={styles.centeredView}>
+            <View style={styles.modalView}>
+              <Text>Congratulations! You've reached your daily goal of {dailyIntakeGoal} ml!</Text>
+              <Button title="Great!" onPress={() => setHasReachedGoal(false)} />
+            </View>
           </View>
-        )}
-        keyExtractor={item => item.id}
-      />
-  
-      <Text style={styles.archiveTitle}>Archived Intakes:</Text>
-      <FlatList
-        data={archivedIntakes}
-        renderItem={({ item }) => (
-          <View style={styles.archiveItem}>
-            <Text>Date: {item.date}</Text>
-            <Text>Total Intake: {item.intake.reduce((total, { amount }) => total + amount, 0)} ml</Text>
-          </View>
-        )}
-        keyExtractor={item => item.date}
-      />
-    </View>
+        </Modal>
+
+        <Text style={styles.summary}>
+          Daily Intake: {totalIntake} ml which is {percentageOfGoal.toFixed(2)}% of your daily intake goal of {dailyIntakeGoal} ml
+        </Text>
+
+        <FlatList
+          data={dailyIntake.slice(0, 5)}
+          renderItem={({ item }) => (
+            <View style={styles.listItem}>
+              <Text>{item.amount} ml at {item.timestamp}</Text>
+            </View>
+          )}
+          keyExtractor={item => item.id}
+        />
+
+        <Text style={styles.archiveTitle}>Archived Intakes:</Text>
+        <FlatList
+          data={archivedIntakes}
+          renderItem={({ item }) => (
+            <View style={styles.archiveItem}>
+              <Text>Date: {item.date}</Text>
+              <Text>Total Intake: {item.intake.reduce((total, { amount }) => total + amount, 0)} ml</Text>
+            </View>
+          )}
+          keyExtractor={item => item.date}
+        />
+      </View>
+    </ImageBackground>
   );
-  
 }
 
 const styles = StyleSheet.create({
-  container: {
+  backgroundImage: {
+    flex: 1,
+    resizeMode: 'cover',
+  },
+  overlay: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -189,21 +196,6 @@ const styles = StyleSheet.create({
   summary: {
     marginTop: 20,
     fontSize: 18,
-  },
-  titleBar: {
-    width: '100%',
-    marginTop: 30,
-    alignItems: 'center',
-  },
-  titleBarText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  underline: {
-    width: '100%',
-    height: 1,
-    backgroundColor: 'black',
-    marginTop: 5,
   },
   listItem: {
     padding: 10,
@@ -226,11 +218,11 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2
+      height: 2,
     },
     shadowOpacity: 0.25,
     shadowRadius: 4,
-    elevation: 5
+    elevation: 5,
   },
   archiveTitle: {
     fontSize: 20,

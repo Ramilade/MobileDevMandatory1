@@ -1,9 +1,10 @@
-import React from 'react';
-import { StyleSheet, View, Button, Text } from 'react-native';
+import React, {useRef} from 'react';
+import { StyleSheet, View, Button, Text, Animated,Image } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import firebase from 'firebase/app';
 import 'firebase/firestore';
+import { PanGestureHandler, GestureHandlerRootView, State } from 'react-native-gesture-handler';
 
 import WaterIntakeInformation from './waterIntakeInformation';
 import DrinkTimer from './drinkTimer';
@@ -38,24 +39,71 @@ export default function App() {
 }
 
 function HomeScreen({ navigation }) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  const onGestureEvent = Animated.event(
+    [
+      {
+        nativeEvent: {
+          translationX: translateX,
+          translationY: translateY,
+        },
+      },
+    ],
+    { useNativeDriver: true }
+  );
+
+  const onHandlerStateChange = event => {
+    if (event.nativeEvent.oldState === State.ACTIVE) {
+      Animated.spring(translateX, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <View style={styles.welcomeContainer}>
-        <Text style={styles.title}>Welcome</Text>
-        <Text style={styles.welcomeMessage}>
-          ...to this simple Drink Timer app. Use it to keep track of your daily liquid intake.
-        </Text>
-      </View>
-
-      <View style={styles.buttonsContainer}>
-        <Button
-          title="Daily Intake Overview"
-          onPress={() => navigation.navigate('DrinkTimer')}
-        />
-        <Button
-          title="Water Intake Recommendations"
-          onPress={() => navigation.navigate('WaterIntakeInformation')}
-        />
+      <Image 
+        source={require('./waterdrop.jpg')} 
+        style={styles.backgroundImage}
+      />
+  
+      <View style={styles.overlay}>
+        <View style={styles.welcomeContainer}>
+          <PanGestureHandler
+            onGestureEvent={onGestureEvent}
+            onHandlerStateChange={onHandlerStateChange}>
+            <Animated.View
+              style={{
+                transform: [
+                  { translateX: translateX },
+                  { translateY: translateY },
+                ],
+              }}>
+              <Text style={styles.title}>Welcome</Text>
+            </Animated.View>
+          </PanGestureHandler>
+          <Text style={styles.welcomeMessage}>
+            ...to this simple Drink Timer app. Use it to keep track of your daily liquid intake.
+          </Text>
+        </View>
+  
+        <View style={styles.buttonsContainer}>
+          <Button
+            title="Daily Intake Overview"
+            onPress={() => navigation.navigate('DrinkTimer')}
+          />
+          <Button
+            title="Water Intake Recommendations"
+            onPress={() => navigation.navigate('WaterIntakeInformation')}
+          />
+        </View>
       </View>
     </View>
   );
@@ -64,8 +112,17 @@ function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+  },
+  backgroundImage: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    opacity: 0.5 // Adjust opacity for watermark effect
+  },
+  overlay: {
+    flex: 1,
     justifyContent: 'center',
+    backgroundColor: 'transparent', // Ensure background is transparent
   },
   welcomeContainer: {
     marginBottom: 20,

@@ -1,16 +1,20 @@
 // waterIntakeInformation.js
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ImageBackground } from 'react-native';
 
 export default function WaterIntakeInformation() {
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.header}>Water Intake Recommendations</Text>
-      <Text style={styles.text}>
-        The recommended amount of water a person should consume daily can vary based on different factors, 
-        including age, gender, level of physical activity, health status, and the climate in which the person resides.
-      </Text>
+    <ImageBackground 
+      source={require('./waterdrop.jpg')} 
+      style={styles.backgroundImage}
+    >
+      <ScrollView style={styles.overlay}>
+        <Text style={styles.header}>Water Intake Recommendations</Text>
+        <Text style={styles.text}>
+          The recommended amount of water a person should consume daily can vary based on different factors, 
+          including age, gender, level of physical activity, health status, and the climate in which the person resides.
+        </Text>
 
       <Text style={styles.text}>
         The World Health Organization (WHO) and many national health authorities have guidelines on water intake. 
@@ -33,14 +37,19 @@ export default function WaterIntakeInformation() {
         During intense physical activity or in hot climates, you might need to drink more regularly.
       </Text>
     </ScrollView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  backgroundImage: {
+    flex: 1,
+    resizeMode: 'cover',
+  },
+  overlay: {
     flex: 1,
     padding: 15,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
   },
   header: {
     fontSize: 24,
